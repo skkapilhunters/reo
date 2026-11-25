@@ -1,0 +1,22 @@
+# --- Core Bot Requirements ---
+discord.py
+python-dotenv
+
+# --- Networking & Requests ---
+aiohttp
+requests
+curl_cffi
+
+# --- Database & Caching ---
+motor
+redis
+supabase
+
+# --- AI & System Utilities ---
+groq
+psutil
+chat-exporter
+
+# --- Encription & Otp Utilities ---
+cryptography
+pyotp 

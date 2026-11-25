@@ -1,0 +1,202 @@
+import discord
+from discord.ext import commands, tasks
+import sqlite3
+import asyncio
+
+class StatusManager(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+        self.db_path = "tasks.db"
+        self.db_lock = asyncio.Lock()
+        self.init_db()
+        self.update_status_loop.start()
+
+    def init_db(self):
+        """Database initialize with category and weight columns"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS active_tasks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_id TEXT UNIQUE,
+                task_name TEXT,
+                category TEXT DEFAULT 'user',
+                weight INTEGER DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        conn.commit()
+        conn.close()
+
+    async def add_task(self, task_id, task_name, category="user", weight=1):
+        """Task start hone par category aur weight ke sath add karega"""
+        async with self.db_lock:
+            try:
+                conn = sqlite3.connect(self.db_path)
+                cursor = conn.cursor()
+                cursor.execute('''
+                    INSERT INTO active_tasks (task_id, task_name, category, weight) 
+                    VALUES (?, ?, ?, ?) 
+                    ON CONFLICT(task_id) DO UPDATE SET weight=excluded.weight, category=excluded.category
+                ''', (task_id, task_name, category, weight))
+                conn.commit()
+            except Exception as e:
+                print(f"[-] DB Error (Add): {e}")
+            finally:
+                conn.close()
+
+    async def remove_task(self, task_id):
+        """Task khatam hone par remove karega"""
+        async with self.db_lock:
+            try:
+                conn = sqlite3.connect(self.db_path)
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM active_tasks WHERE task_id = ?", (task_id,))
+                conn.commit()
+            except Exception as e:
+                print(f"[-] DB Error (Remove): {e}")
+            finally:
+                conn.close()
+
+    async def get_total_weight(self):
+        """Sirf un tasks ka weight sum karega jo status affect karte hain (weight > 0)"""
+        async with self.db_lock:
+            try:
+                conn = sqlite3.connect(self.db_path)
+                cursor = conn.cursor()
+                cursor.execute("SELECT SUM(weight) FROM active_tasks")
+                result = cursor.fetchone()[0]
+                return result if result is not None else 0
+            except Exception as e:
+                print(f"[-] DB Error (Weight): {e}")
+                return 0
+            finally:
+                conn.close()
+
+    async def get_tasks_by_category(self, category=None):
+        """Category ke hisaab se active tasks nikalne ke liye (jaise command mein dikhane ke liye)"""
+        async with self.db_lock:
+            try:
+                conn = sqlite3.connect(self.db_path)
+                cursor = conn.cursor()
+                if category:
+                    cursor.execute("SELECT task_id, task_name, weight, created_at FROM active_tasks WHERE category = ?", (category,))
+                else:
+                    cursor.execute("SELECT task_id, task_name, category, weight, created_at FROM active_tasks")
+                return cursor.fetchall()
+            except Exception as e:
+                print(f"[-] DB Error (Fetch): {e}")
+                return []
+            finally:
+                conn.close()
+
+    @tasks.loop(seconds=10)
+    async def update_status_loop(self):
+        """Total weight ke basis par status change karega"""
+        total_weight = await self.get_total_weight()
+
+        if total_weight == 0:
+            activity = discord.Activity(type=discord.ActivityType.watching, name="for tasks | Idle 🟢")
+            await self.bot.change_presence(activity=activity, status=discord.Status.idle)
+        elif 1 <= total_weight < 10:
+            activity = discord.Activity(type=discord.ActivityType.playing, name=f"Running {total_weight} task(s) ⚡")
+            await self.bot.change_presence(activity=activity, status=discord.Status.online)
+        else:
+            activity = discord.Activity(type=discord.ActivityType.watching, name="High Workload / Updating 🔴")
+            await self.bot.change_presence(activity=activity, status=discord.Status.dnd)
+
+    @update_setup_loop_before if hasattr(globals(), 'update_setup_loop_before') else lambda self: self.bot.wait_until_ready()
+    @update_status_loop.before_loop
+    async def before_update_status(self):
+        await self.bot.wait_until_ready()
+
+    def cog_unload(self):
+        self.update_status_loop.cancel()
+
+async def setup(bot):
+    await bot.add_cog(StatusManager(bot))
+
+```import discord
+from discord.ext import commands, tasks
+import sqlite3
+import os
+
+class StatusManager(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+        self.db_path = "tasks.db"
+        self.init_db()
+        self.update_status_loop.start()
+
+    def init_db(self):
+        """SQLite database aur table initialize karne ke liye"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS active_tasks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_name TEXT UNIQUE
+            )
+        ''')
+        conn.commit()
+        conn.close()
+
+    def add_task(self, task_name):
+        """Jab koi task start ho, tab isko DB mein add karein"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute("INSERT OR IGNORE INTO active_tasks (task_name) VALUES (?)", (task_name,))
+            conn.commit()
+        except Exception as e:
+            print(f"[-] DB Error (Add): {e}")
+        finally:
+            conn.close()
+
+    def remove_task(self, task_name):
+        """Jab task khatam ho jaye, tab DB se remove karein"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM active_tasks WHERE task_name = ?", (task_name,))
+            conn.commit()
+        except Exception as e:
+            print(f"[-] DB Error (Remove): {e}")
+        finally:
+            conn.close()
+
+    def get_workload_count(self):
+        """Active tasks ki total count nikalne ke liye"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM active_tasks")
+            count = cursor.fetchone()[0]
+            return count
+        except Exception as e:
+            print(f"[-] DB Error (Count): {e}")
+            return 0
+        finally:
+            conn.close()
+
+    @tasks.loop(seconds=15)
+    async def update_status_loop(self):
+        """Har 15 seconds mein workload check karke bot status update karega"""
+        count = self.get_workload_count()
+        if count > 0:
+            status_text = f"Working on {count} task(s) ⚙️"
+            activity = discord.Activity(type=discord.ActivityType.watching, name=status_text)
+            await self.bot.change_presence(activity=activity, status=discord.Status.dnd)
+        else:
+            activity = discord.Activity(type=discord.ActivityType.listening, name="for tasks | Idle 🟢")
+            await self.bot.change_presence(activity=activity, status=discord.Status.online)
+
+    @update_status_loop.before_loop
+    async def before_update_status(self):
+        await self.bot.wait_until_ready()
+
+    def cog_unload(self):
+        self.update_status_loop.cancel()
+
+async def setup(bot):
+    await bot.add_cog(StatusManager(bot))```

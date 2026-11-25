@@ -1,0 +1,44 @@
+1. Background Task ke liye (Weight 0, Status change nahi hoga):
+# Background task start hote hi:
+await status_cog.add_task(task_id="bg_sync_1", task_name="Database Sync", category="background", weight=0)
+
+# Background task khatam hone par:
+await status_cog.remove_task(task_id="bg_sync_1")
+
+2. Normal User / Long Task ke liye (Weight 1 ya zyada, Status change hoga):
+task_id = f"user_task_{uuid.uuid4().hex[:8]}"
+await status_cog.add_task(task_id=task_id, task_name="Heavy Download", category="user", weight=2)
+
+3. Category-wise Tasks dekhne ke liye Command (Jaise !activetasks):
+@commands.command(name="activetasks")
+async def show_active_tasks(self, ctx):
+    status_cog = self.bot.get_cog("StatusManager")
+    if status_cog:
+        tasks = await status_cog.get_tasks_by_category() # Saare tasks
+        if not tasks:
+            await ctx.send("Abhi koi active task nahi chal raha hai! 🟢")
+            return
+        
+        msg = "**Active Tasks List:**\n"
+        for t in tasks:
+            msg += f"- ID: `{t[0]}` | Name: **{t[1]}** | Category: *{t[2]}* | Weight: {t[3]}\n"
+        await ctx.send(msg)
+
+
+
+
+
+
+
+
+import uuid
+
+# Jab bhi koi task shuru ho (e.g. Announcement):
+unique_task_id = f"announcement_{uuid.uuid4().hex[:8]}" # Output jaise: announcement_a1b2c3d4
+weight = 1
+
+# Isko DB mein add kar do:
+await status_cog.add_task(task_id=unique_task_id, task_name="announcement", weight=weight)
+
+# Aur jab wo task khatam ho jaye, toh usi unique_task_id se remove kar do:
+await status_cog.remove_task(task_id=unique_task_id)

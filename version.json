@@ -1,0 +1,10 @@
+{
+  "version": "0.0.1",
+  "build_number": 102,
+  "release_date": "2026-11-10",
+  "min_bot_version": "1.0.0",
+"":"2026.5.4.16
+
+• Added support for the M.O.M.M.A event troop. The bot now deploys M.O.M.M.A troops it finds in your battle army, alongside the other event troops at the top of the default troop deployment plan.
+"
+}
